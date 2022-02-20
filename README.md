@@ -8,7 +8,8 @@ or build as a binary:
 then run as usual binary with same flags as before
 
 Example:
-```$ ./GoMap.exe -i 192.168.1.69,192.168.1.254 -p 22,80,443
+```
+\$ ./GoMap.exe -i 192.168.1.69,192.168.1.254 -p 22,80,443
 Starting GoMap...
 
 Host 192.168.1.69:
