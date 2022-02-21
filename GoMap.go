@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net"
 	"sort"
 	"strconv"
@@ -11,6 +12,8 @@ import (
 	"time"
 
 	"github.com/adedayo/cidr"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 )
 
 func connect(ip string, port int, reply chan string) bool {
@@ -27,9 +30,106 @@ func connect(ip string, port int, reply chan string) bool {
 	return true
 }
 
-// func SYN(ip string, port int, reply chan string) bool {
+func SYN(ip string, port int, reply chan string) bool {
+	dstaddrs, err := net.LookupIP(ip)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// }
+	// parse the destination host and port from the command line os.Args
+	dstip := dstaddrs[0].To4()
+	var dstport layers.TCPPort
+	dstport = layers.TCPPort(port)
+
+	srcip, sport := localIPPort(dstip)
+	srcport := layers.TCPPort(sport)
+	log.Printf("using srcip: %v", srcip.String())
+	fmt.Println(srcport.String())
+
+	// Our IP header... not used, but necessary for TCP checksumming.
+	ipHeader := &layers.IPv4{
+		SrcIP:    srcip,
+		DstIP:    dstip,
+		Protocol: layers.IPProtocolTCP,
+	}
+	// Our TCP header
+	tcp := &layers.TCP{
+		SrcPort: srcport,
+		DstPort: dstport,
+		Seq:     1105024978,
+		SYN:     true,
+		Window:  14600,
+	}
+	tcp.SetNetworkLayerForChecksum(ipHeader)
+
+	// Serialize.  Note:  we only serialize the TCP layer, because the
+	// socket we get with net.ListenPacket wraps our data in IPv4 packets
+	// already.  We do still need the IP layer to compute checksums
+	// correctly, though.
+	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{
+		ComputeChecksums: true,
+		FixLengths:       true,
+	}
+	if err := gopacket.SerializeLayers(buf, opts, tcp); err != nil {
+		log.Fatal(err)
+	}
+
+	conn, err := net.ListenPacket("ip4:tcp", "0.0.0.0")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := conn.WriteTo(buf.Bytes(), &net.IPAddr{IP: dstip}); err != nil {
+		log.Fatal(err)
+	}
+
+	// Set deadline so we don't wait forever.
+	if err := conn.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		log.Fatal(err)
+	}
+
+	for {
+		b := make([]byte, 4096)
+		n, addr, err := conn.ReadFrom(b)
+		if err != nil {
+			log.Println("error reading packet: ", err)
+			return false
+		} else if addr.String() == dstip.String() {
+			// Decode a packet
+			packet := gopacket.NewPacket(b[:n], layers.LayerTypeTCP, gopacket.Default)
+			// Get the TCP layer from this packet
+			if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+				tcp, _ := tcpLayer.(*layers.TCP)
+
+				if tcp.DstPort == srcport {
+					if tcp.SYN && tcp.ACK {
+						log.Printf("Port %d is OPEN\n", dstport)
+					} else {
+						log.Printf("Port %d is CLOSED\n", dstport)
+					}
+					return true
+				}
+			}
+		}
+	}
+}
+
+func localIPPort(dstip net.IP) (net.IP, int) {
+	serverAddr, err := net.ResolveUDPAddr("udp", dstip.String()+":12345")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// We don't actually connect to anything, but we can determine
+	// based on our destination ip what source ip we should use.
+	if con, err := net.DialUDP("udp", nil, serverAddr); err == nil {
+		if udpaddr, ok := con.LocalAddr().(*net.UDPAddr); ok {
+			return udpaddr.IP, udpaddr.Port
+		}
+	}
+	return nil, -1
+}
 
 func main() {
 	// declare vars
@@ -116,38 +216,37 @@ func main() {
 				delete(scannedPorts, j)
 			}
 		}
+	} else {
+		reply := make(chan string)
+		for ipIndex := 0; ipIndex < len(ipList); ipIndex++ {
+			for i := range portList {
+				go SYN(ipList[ipIndex], portList[i], reply)
+				scannedPorts[portList[i]] += <-reply + "\n"
+			}
+			// sort scannedPorts
+			temp := ""
+			sorted := make([]int, 0, len(scannedPorts))
+			for k := range scannedPorts {
+				sorted = append(sorted, k)
+			}
+			sort.Ints(sorted)
+			for _, k := range sorted {
+				if strings.Contains(scannedPorts[k], "open") {
+					temp += scannedPorts[k]
+				} else { // get rid of long lists of closed ports for ease of reading
+					if strings.Contains(scannedPorts[k-1], "closed") && strings.Contains(scannedPorts[k+1], "closed") {
+						temp += "|............closed\n"
+					} else {
+						temp += scannedPorts[k]
+					}
+				}
+			}
+			result[ipList[ipIndex]] = temp
+			for j := range scannedPorts {
+				delete(scannedPorts, j)
+			}
+		}
 	}
-	// } else {
-	// 	reply := make(chan string)
-	// 	for ipIndex := 0; ipIndex < len(ipList); ipIndex++ {
-	// 		for i := range portList {
-	// 			go SYN(ipList[ipIndex], portList[i], reply)
-	// 			scannedPorts[portList[i]] += <-reply + "\n"
-	// 		}
-	// 		// sort scannedPorts
-	// 		temp := ""
-	// 		sorted := make([]int, 0, len(scannedPorts))
-	// 		for k := range scannedPorts {
-	// 			sorted = append(sorted, k)
-	// 		}
-	// 		sort.Ints(sorted)
-	// 		for _, k := range sorted {
-	// 			if strings.Contains(scannedPorts[k], "open") {
-	// 				temp += scannedPorts[k]
-	// 			} else { // get rid of long lists of closed ports for ease of reading
-	// 				if strings.Contains(scannedPorts[k-1], "closed") && strings.Contains(scannedPorts[k+1], "closed") {
-	// 					temp += "|............closed\n"
-	// 				} else {
-	// 					temp += scannedPorts[k]
-	// 				}
-	// 			}
-	// 		}
-	// 		result[ipList[ipIndex]] = temp
-	// 		for j := range scannedPorts {
-	// 			delete(scannedPorts, j)
-	// 		}
-	// 	}
-	// }
 	for scanned := range result {
 		fmt.Println("\nHost " + scanned + ":")
 		fmt.Println(result[scanned])
