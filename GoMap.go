@@ -31,39 +31,34 @@ func connect(ip string, port int, reply chan string) bool {
 }
 
 func SYN(ip string, port int, reply chan string) bool {
-	dstaddrs, err := net.LookupIP(ip)
+	dstAddress, err := net.LookupIP(ip)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// parse the destination host and port from the command line os.Args
-	dstip := dstaddrs[0].To4()
-	var dstport layers.TCPPort
-	dstport = layers.TCPPort(port)
+	dstIP := dstAddress[0].To4()
+	var dstPort layers.TCPPort
+	dstPort = layers.TCPPort(port)
 
-	srcip, sport := localIPPort(dstip)
-	srcport := layers.TCPPort(sport)
+	srcIP, sport := localIPPort(dstIP)
+	srcPort := layers.TCPPort(sport)
 
-	// Our IP header... not used, but necessary for TCP checksumming.
+	// IP header, only used with checksum
 	ipHeader := &layers.IPv4{
-		SrcIP:    srcip,
-		DstIP:    dstip,
-		Protocol: layers.IPProtocolTCP,
+		SrcIP:    srcIP,
+		DstIP:    dstIP,
+		Protocol: layers.IPProtocolTCP, // layers.I(nternet)P(rotocol)ProtocolT(ransport)C(ontrol)P(rotocol)
 	}
-	// Our TCP header
+	// TCP header
 	tcp := &layers.TCP{
-		SrcPort: srcport,
-		DstPort: dstport,
+		SrcPort: srcPort,
+		DstPort: dstPort,
 		Seq:     1105024978,
 		SYN:     true,
 		Window:  14600,
 	}
 	tcp.SetNetworkLayerForChecksum(ipHeader)
 
-	// Serialize.  Note:  we only serialize the TCP layer, because the
-	// socket we get with net.ListenPacket wraps our data in IPv4 packets
-	// already.  We do still need the IP layer to compute checksums
-	// correctly, though.
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{
 		ComputeChecksums: true,
@@ -78,11 +73,10 @@ func SYN(ip string, port int, reply chan string) bool {
 		log.Fatal(err)
 	}
 	defer conn.Close()
-	if _, err := conn.WriteTo(buf.Bytes(), &net.IPAddr{IP: dstip}); err != nil {
+	if _, err := conn.WriteTo(buf.Bytes(), &net.IPAddr{IP: dstIP}); err != nil {
 		log.Fatal(err)
 	}
 
-	// Set deadline so we don't wait forever.
 	if err := conn.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
 		log.Fatal(err)
 	}
@@ -93,14 +87,12 @@ func SYN(ip string, port int, reply chan string) bool {
 		if err != nil {
 			log.Println("error reading packet: ", err)
 			return false
-		} else if addr.String() == dstip.String() {
-			// Decode a packet
+		} else if addr.String() == dstIP.String() {
 			packet := gopacket.NewPacket(b[:n], layers.LayerTypeTCP, gopacket.Default)
-			// Get the TCP layer from this packet
 			if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
 				tcp, _ := tcpLayer.(*layers.TCP)
 
-				if tcp.DstPort == srcport {
+				if tcp.DstPort == srcPort {
 					if tcp.SYN && tcp.ACK {
 						reply <- "|--port " + strconv.Itoa(port) + "---open"
 					} else {
@@ -113,17 +105,15 @@ func SYN(ip string, port int, reply chan string) bool {
 	}
 }
 
-func localIPPort(dstip net.IP) (net.IP, int) {
-	serverAddr, err := net.ResolveUDPAddr("udp", dstip.String()+":12345")
+func localIPPort(dstIP net.IP) (net.IP, int) {
+	serverAddress, err := net.ResolveUDPAddr("udp", dstIP.String()+":12345")
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// We don't actually connect to anything, but we can determine
-	// based on our destination ip what source ip we should use.
-	if con, err := net.DialUDP("udp", nil, serverAddr); err == nil {
-		if udpaddr, ok := con.LocalAddr().(*net.UDPAddr); ok {
-			return udpaddr.IP, udpaddr.Port
+	// use this to find out what the source IP should be when crafting SYN packet
+	if con, err := net.DialUDP("udp", nil, serverAddress); err == nil {
+		if udpAddress, ok := con.LocalAddr().(*net.UDPAddr); ok {
+			return udpAddress.IP, udpAddress.Port
 		}
 	}
 	return nil, -1
