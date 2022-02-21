@@ -188,14 +188,21 @@ func main() {
 				sorted = append(sorted, k)
 			}
 			sort.Ints(sorted)
+			multi := 0
 			for _, k := range sorted {
 				if strings.Contains(scannedPorts[k], "open") {
 					temp += scannedPorts[k]
 				} else { // get rid of long lists of closed ports for ease of reading
 					if strings.Contains(scannedPorts[k-1], "closed") && strings.Contains(scannedPorts[k+1], "closed") {
-						temp += "|............closed\n"
+						if multi >= 1 {
+							temp += ""
+						} else {
+							temp += "|............closed\n"
+							multi += 1
+						}
 					} else {
 						temp += scannedPorts[k]
+						multi = 0
 					}
 				}
 			}
@@ -218,14 +225,21 @@ func main() {
 				sorted = append(sorted, k)
 			}
 			sort.Ints(sorted)
+			multi := 0
 			for _, k := range sorted {
 				if strings.Contains(scannedPorts[k], "open") {
 					temp += scannedPorts[k]
 				} else { // get rid of long lists of closed ports for ease of reading
 					if strings.Contains(scannedPorts[k-1], "closed") && strings.Contains(scannedPorts[k+1], "closed") {
-						temp += "|............closed\n"
+						if multi >= 1 {
+							temp += ""
+						} else {
+							temp += "|............closed\n"
+							multi += 1
+						}
 					} else {
 						temp += scannedPorts[k]
+						multi = 0
 					}
 				}
 			}
