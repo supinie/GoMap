@@ -43,8 +43,6 @@ func SYN(ip string, port int, reply chan string) bool {
 
 	srcip, sport := localIPPort(dstip)
 	srcport := layers.TCPPort(sport)
-	log.Printf("using srcip: %v", srcip.String())
-	fmt.Println(srcport.String())
 
 	// Our IP header... not used, but necessary for TCP checksumming.
 	ipHeader := &layers.IPv4{
@@ -104,9 +102,9 @@ func SYN(ip string, port int, reply chan string) bool {
 
 				if tcp.DstPort == srcport {
 					if tcp.SYN && tcp.ACK {
-						log.Printf("Port %d is OPEN\n", dstport)
+						reply <- "|--port " + strconv.Itoa(port) + "---open"
 					} else {
-						log.Printf("Port %d is CLOSED\n", dstport)
+						reply <- "|--port " + strconv.Itoa(port) + "---closed"
 					}
 					return true
 				}
