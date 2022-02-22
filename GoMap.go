@@ -9,7 +9,7 @@
 //   \$$$$$$   \$$$$$$  \$$      \$$  \$$$$$$$| $$$$$$$
 // 										  	  | $$
 // 								 	 	  	  | $$
-// 										   	  \$$
+// 										   	   \$$
 
 package main
 
@@ -151,7 +151,7 @@ func main() {
 	fmt.Println("  \\$$$$$$   \\$$$$$$  \\$$      \\$$  \\$$$$$$$| $$$$$$$ ")
 	fmt.Println("                                           | $$    ")
 	fmt.Println("                                           | $$    ")
-	fmt.Println("                                           \\$$")
+	fmt.Println("                                            \\$$")
 
 	fmt.Println("\nStarting GoMap...")
 
