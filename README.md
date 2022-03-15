@@ -1,7 +1,7 @@
 # GoMap
 
 # to run:
-`go run . -i <ip(s)> -p <port(s)>` in default TCP connect mode, `go run . -i <ip(s)> -p <port(s)> -s` to run in TCP SYN mode (sudo needed). Order of flags does not matter.
+`go run . -i <ip(s)> -p <port(s)>` in default TCP connect mode, `go run . -i <ip(s)> -p <port(s)> -s` to run in TCP SYN mode (sudo needed). Order of flags does not matter. If `-p` is not included, it will default to top 1000 ports.
 
 *please note, if using CiDR notation, only one argument can be accepted by `-i`, current output for CiDR input is a bit rubbish as well sorry.
 
