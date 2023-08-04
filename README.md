@@ -15,7 +15,7 @@
 
 
 GoMap is a command-line tool written in Golang that allows you to perform TCP connect and TCP SYN scans on one or more hosts. It is inspired by the functionality of Nmap but is focused on simplicity and efficiency.
-Installation
+### Installation
 
 To run GoMap, ensure you have Golang installed on your system. Clone this repository and then either use go run or build it as a binary.
 
